@@ -8,7 +8,7 @@
 2. 粘贴下面这条 **索引地址**：
 
    ```
-   https://raw.githubusercontent.com/REPLACE_ME/mihon-lizi-repo/main/index.min.json
+   https://raw.githubusercontent.com/xpc010307/mihon-lizi-repo/main/index.min.json
    ```
 
 3. 回到 **浏览 → 扩展**，把语言过滤里的 **中文** 打开，就能看到「栗子漫画」，点下载图标安装。
