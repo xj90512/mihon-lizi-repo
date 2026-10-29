@@ -19,6 +19,9 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - run: ./gradlew --no-daemon testDebugUnitTest assembleRelease createReleaseExtensionJar
       - run: python3 scripts/verify_package.py --build-only
