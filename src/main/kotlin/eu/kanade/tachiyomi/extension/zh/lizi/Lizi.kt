@@ -2,7 +2,6 @@
 
 package eu.kanade.tachiyomi.extension.zh.lizi
 
-import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.ListPreference
 import androidx.preference.EditTextPreference
@@ -28,8 +27,6 @@ import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -55,12 +52,8 @@ class Lizi : HttpSource(), ConfigurableSource {
 
     override val supportsLatest = true
 
-    // Match the reader's per-source preference namespace.
-    private val PREF_FILE: String
-        get() = "source_$id"
-
     private val preferences: SharedPreferences by lazy {
-        Injekt.get<Context>().getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
+        liziPreferences(id)
     }
 
     // ------------------------------------------------------------------ 设置项

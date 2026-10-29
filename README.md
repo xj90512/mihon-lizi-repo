@@ -2,6 +2,7 @@
 
 面向 Tachimanga 5.2 测试的栗子漫画扩展。订阅直接安装原生 JVM JAR；另提供 Android APK。
 用户已在 iPhone 的 Tachimanga 5.2 确认仓库添加与扩展安装成功；登录后的正文阅读仍待实测。
+1.6.4 修复 1.6.3 在手机打开源时的 `No registered instance or factory ... android.content.Context`，新版仍需手机复测。
 
 ## 安装
 
@@ -14,9 +15,9 @@ https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/index.min.json
 GitHub Pages 上的同内容索引在本次手机测试中提示「插件仓库不存在」，因此不作为推荐订阅入口；Pages 继续提供安装包下载。
 
 打开中文扩展列表，安装「栗子漫画」。这是 **Tachimanga 的 JAR 订阅**，不是 Android 的 APK 订阅。
-如果商店安装仍有问题，可以下载 [JAR 文件](https://xj90512.github.io/mihon-lizi-repo/apk/tachiyomi-zh.lizi-v1.6.3.jar)，
+如果商店安装仍有问题，可以下载 [JAR 文件](https://xj90512.github.io/mihon-lizi-repo/apk/tachiyomi-zh.lizi-v1.6.4.jar)，
 再在 Tachimanga「浏览 → 扩展 → ＋」选择文件导入。
-Android 用户可单独下载 [APK](https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/apk/tachiyomi-zh.lizi-v1.6.3.apk)。
+Android 用户可单独下载 [APK](https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/apk/tachiyomi-zh.lizi-v1.6.4.apk)。
 
 默认下载通过本仓库的 GitHub Pages 静态文件服务，不调用 APK 在线转换或 GitHub Releases API。
 jsDelivr 当前对本仓库的 JAR 返回 403，因此不作为安装包下载地址。
@@ -31,6 +32,12 @@ jsDelivr 当前对本仓库的 JAR 返回 403，因此不作为安装包下载�
 - 支持裸 JWT、`Jwt:` 和 `Bearer` 前缀。令牌只发送到 HTTPS 章节接口，不发送到公开元数据接口或图片 CDN。
 - 账号的阅读时间、权限与额度仍由站方决定；不会推导受限正文地址，也不会自动重试消耗额度的章节请求。
 - 图片首选线路可在源设置选择；仅图片失败时有限次数换线，遇到 429 停止换线。
+
+## 1.6.4 的修复
+
+- 参考 CopyManga 的实现，通过宿主注册的 `Application` 读取设置，同时兼容只注册 `Context` 的宿主。
+- 保留 `source_6794114338793425275` 设置命名空间、授权键和源 ID。
+- 回归测试复现了旧版在 Application-only 宿主上的相同异常，并验证修复后两种宿主均可读取设置。
 
 ## 1.6.3 的变化
 
@@ -59,6 +66,7 @@ python3 scripts/verify_package.py --build-only
 单元测试覆盖签名、查询参数、令牌前缀、章节与图片顺序、错误响应、换线、凭证隔离，以及章节不重试和 429 不放大。
 2026-10-29 本地验证：14 项测试通过；Suwayomi Server 2.4.2366 成功安装 JAR、加载源与设置，并取得热门、最新、搜索、详情、章节目录及 JPEG 封面。
 随后用户通过上述 Raw 订阅在 iPhone 上成功添加仓库并安装 1.6.3；登录后的正文阅读尚未验证。
+1.6.4 共 16 项单元测试，新增 Application-only / Context-only 两种宿主的设置读取测试。
 
 正式 APK 签名使用环境变量 `LIZI_KEYSTORE`、`LIZI_STORE_PASSWORD`；可选 `LIZI_KEY_ALIAS`（默认 `lizi`）与
 `LIZI_KEY_PASSWORD`（默认与 store password 相同）。没有正式密钥时仅使用本地 debug 签名做构建验证，不应将该 APK 发布到正式商店。
@@ -79,6 +87,7 @@ python3 scripts/verify_package.py
 - Kotlin 源码基于 [xpc010307/mihon-extension-lizi](https://github.com/xpc010307/mihon-extension-lizi)，基线 `e24ac88`；保留原作者署名。
 - 签名、历史图片路径与章节顺序的协议处理参考 [Walter498/Walter](https://github.com/Walter498/Walter)，核对基线 `d178a49`。
   本仓库独立实现 Kotlin 协议逻辑，没有移植 Venera 专用宿主代码、评论系统或正文探测。
+- 设置读取的宿主兼容方式参考 [LittleSurvival/copymanga-copy20](https://github.com/LittleSurvival/copymanga-copy20) 的 `CopyManga` 实现。
 - 扩展结构参考 [Tachimanga 官方制作指南](https://tachimanga.app/help/guides/extensions_guide.html)；JAR 包结构参照
   [Keiyoushi](https://github.com/keiyoushi/extensions-source) 与 [Uchiyomi extension](https://github.com/AngeloSha/uchiyomi-extension) 的 JVM 分发方式。
 

@@ -20,8 +20,8 @@ android {
 
         // versionName 的 "1.6" 前缀会被 mihon 解析为 extensions-lib 版本
         // （ExtensionLoader.SUPPORTED_LIB_VERSIONS = [1.4, 1.6]），不要改。
-        versionCode = 3
-        versionName = "1.6.3"
+        versionCode = 4
+        versionName = "1.6.4"
     }
 
     signingConfigs {
@@ -71,6 +71,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     testImplementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("uy.kohesive.injekt:injekt-core:1.16.1")
     // 全部 compileOnly：运行时由 mihon 宿主提供（扩展 apk 里不打包这些库）
     compileOnly("com.github.mihonapp:extensions-lib:1.6.0-rc1")
     compileOnly("com.squareup.okhttp3:okhttp:4.12.0")
