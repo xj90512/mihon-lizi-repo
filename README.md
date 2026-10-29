@@ -8,7 +8,7 @@
 在 Tachimanga 的扩展仓库中添加下面任一地址，两者内容相同：
 
 ```text
-https://cdn.jsdelivr.net/gh/xj90512/mihon-lizi-repo@main/index.min.json
+https://xj90512.github.io/mihon-lizi-repo/index.min.json
 ```
 
 ```text
@@ -16,9 +16,12 @@ https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/index.min.json
 ```
 
 打开中文扩展列表，安装「栗子漫画」。这是 **Tachimanga 的 JAR 订阅**，不是 Android 的 APK 订阅。
-如果商店安装仍有问题，可以下载 [JAR 文件](https://cdn.jsdelivr.net/gh/xj90512/mihon-lizi-repo@main/apk/tachiyomi-zh.lizi-v1.6.3.jar)，
+如果商店安装仍有问题，可以下载 [JAR 文件](https://xj90512.github.io/mihon-lizi-repo/apk/tachiyomi-zh.lizi-v1.6.3.jar)，
 再在 Tachimanga「浏览 → 扩展 → ＋」选择文件导入。
 Android 用户可单独下载 [APK](https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/apk/tachiyomi-zh.lizi-v1.6.3.apk)。
+
+默认下载通过本仓库的 GitHub Pages 静态文件服务，不调用 APK 在线转换或 GitHub Releases API。
+jsDelivr 当前对本仓库的 JAR 返回 403，因此不作为安装包下载地址。
 
 不要把 APK 简单改名为 JAR：本仓库 JAR 内是真正的 Java 8 `.class`，带有效栈映射帧、AndroidManifest.xml 与图标资源。
 旧版 APK 的转换或初始化错误，与 GitHub 的 403/429 下载限流是不同环节；本版本不能承诺修复所有 `Internal Server Error`。

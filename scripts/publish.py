@@ -40,8 +40,9 @@ def main():
     for src, dest in [(jar, ROOT / f"apk/{stem}.jar"), (apk, ROOT / f"apk/{stem}.apk")]:
         dest.parent.mkdir(exist_ok=True)
         shutil.copyfile(src, dest)
-    cdn = f"https://cdn.jsdelivr.net/gh/{args.repo}@main"
-    jar_url = f"{cdn}/apk/{stem}.jar"
+    owner, repository = args.repo.split("/")
+    pages = f"https://{owner}.github.io/{repository}"
+    jar_url = f"{pages}/apk/{stem}.jar"
     entry = {
         "name": "栗子漫画", "pkg": package, "apk": stem + ".jar", "jar": stem + ".jar",
         "apkUrl": jar_url, "jarUrl": jar_url,
