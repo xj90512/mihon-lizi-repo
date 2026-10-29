@@ -60,12 +60,6 @@ internal class LiziInterceptor(
     }
 
     private fun isImage(response: Response): Boolean {
-        val bytes = response.peekBody(16).bytes()
-        return bytes.size >= 3 && (
-            (bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte()) ||
-                (bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes.copyOfRange(1, 4).contentEquals("PNG".toByteArray())) ||
-                (bytes.size >= 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP") ||
-                (bytes.size >= 12 && String(bytes, 4, 8, Charsets.US_ASCII).startsWith("ftypavif"))
-            )
+        return LiziProtocol.isImage(response.peekBody(16).bytes())
     }
 }

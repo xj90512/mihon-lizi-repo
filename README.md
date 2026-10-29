@@ -1,8 +1,7 @@
 # 栗子漫画 · Tachimanga
 
 面向 Tachimanga 5.2 测试的栗子漫画扩展。订阅直接安装原生 JVM JAR；另提供 Android APK。
-用户已在 iPhone 的 Tachimanga 5.2 确认仓库添加与扩展安装成功；登录后的正文阅读仍待实测。
-1.6.4 修复 1.6.3 在手机打开源时的 `No registered instance or factory ... android.content.Context`，新版仍需手机复测。
+用户已在 iPhone 的 Tachimanga 5.2 确认仓库添加与扩展安装成功。1.6.5 新增免令牌图片探测，仍需手机验收正文阅读。
 
 ## 安装
 
@@ -15,9 +14,9 @@ https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/index.min.json
 GitHub Pages 上的同内容索引在本次手机测试中提示「插件仓库不存在」，因此不作为推荐订阅入口；Pages 继续提供安装包下载。
 
 打开中文扩展列表，安装「栗子漫画」。这是 **Tachimanga 的 JAR 订阅**，不是 Android 的 APK 订阅。
-如果商店安装仍有问题，可以下载 [JAR 文件](https://xj90512.github.io/mihon-lizi-repo/apk/tachiyomi-zh.lizi-v1.6.4.jar)，
+如果商店安装仍有问题，可以下载 [JAR 文件](https://xj90512.github.io/mihon-lizi-repo/apk/tachiyomi-zh.lizi-v1.6.5.jar)，
 再在 Tachimanga「浏览 → 扩展 → ＋」选择文件导入。
-Android 用户可单独下载 [APK](https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/apk/tachiyomi-zh.lizi-v1.6.4.apk)。
+Android 用户可单独下载 [APK](https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/apk/tachiyomi-zh.lizi-v1.6.5.apk)。
 
 默认下载通过本仓库的 GitHub Pages 静态文件服务，不调用 APK 在线转换或 GitHub Releases API。
 jsDelivr 当前对本仓库的 JAR 返回 403，因此不作为安装包下载地址。
@@ -28,10 +27,24 @@ jsDelivr 当前对本仓库的 JAR 返回 403，因此不作为安装包下载�
 ## 浏览和阅读
 
 - 热门、最新、搜索、详情和章节列表使用公开接口，不需要账号令牌。
-- 正文使用官方 `chapter/v3` 返回的图片数组，保持官方顺序；在源设置的 Authorization 中填写你自己的账号令牌。
+- Authorization 选填。留空时依据公开详情里的本章封面目录探测编号图片，按文件页码读取；填写后使用官方 `chapter/v3` 返回的图片顺序。
 - 支持裸 JWT、`Jwt:` 和 `Bearer` 前缀。令牌只发送到 HTTPS 章节接口，不发送到公开元数据接口或图片 CDN。
-- 账号的阅读时间、权限与额度仍由站方决定；不会推导受限正文地址，也不会自动重试消耗额度的章节请求。
+- 官方模式的阅读时间、权限与额度仍由站方决定；不会自动重试消耗额度的章节请求。令牌失效时明确报错，不自动重复请求官方接口。
 - 图片首选线路可在源设置选择；仅图片失败时有限次数换线，遇到 429 停止换线。
+
+升级到 1.6.5 后，若要测试免令牌模式：清空源设置的 Authorization，回到漫画详情下拉刷新章节目录，再打开正文。
+刷新会保存公开的章节封面路径，保留原章节 ID 与书架记录；旧目录未刷新时会提示缺少图片路径。
+
+## 1.6.5 的变化
+
+- 参考 Walter 的可选令牌分流，新增公开图片探测；不使用账号令牌请求图片 CDN。
+- 仅在元数据给出的本章目录内探测，最多 600 页、4 个并发、60 秒；不预取其他章节。HTTP 401/403/429 停止探测。
+- 检查图片签名与实际大小，排除 HTML 和站方小占位图；网络错误不会被当作章节结束。
+- 保存最近 4096 个章节的公开封面路径，便于重启后读取；超出缓存或恢复旧备份时刷新目录即可补齐。
+- 完整检查同批结果后再判断结尾，验证仍存在的封面页作范围下限，防止过早截断。
+
+探测模式首次打开章节较慢，文件页码不一定等于官方阅读顺序，少数章节可能缺页或无法识别；达到上限时会报错，不返回被强行截短的列表。
+需要准确官方顺序时填写自己的 Authorization。
 
 ## 1.6.4 的修复
 
@@ -67,6 +80,8 @@ python3 scripts/verify_package.py --build-only
 2026-10-29 本地验证：14 项测试通过；Suwayomi Server 2.4.2366 成功安装 JAR、加载源与设置，并取得热门、最新、搜索、详情、章节目录及 JPEG 封面。
 随后用户通过上述 Raw 订阅在 iPhone 上成功添加仓库并安装 1.6.3；登录后的正文阅读尚未验证。
 1.6.4 共 16 项单元测试，新增 Application-only / Context-only 两种宿主的设置读取测试。
+1.6.5 共 28 项单元测试，新增探测顺序、占位图、并发错误、已知封面锚点、限流停止、超时取消与封面缓存测试。
+桌面引擎已在 Authorization 留空时为一个实际样章探测得到 39 页；这不保证所有章节的完整性、顺序或手机兼容性。
 
 正式 APK 签名使用环境变量 `LIZI_KEYSTORE`、`LIZI_STORE_PASSWORD`；可选 `LIZI_KEY_ALIAS`（默认 `lizi`）与
 `LIZI_KEY_PASSWORD`（默认与 store password 相同）。没有正式密钥时仅使用本地 debug 签名做构建验证，不应将该 APK 发布到正式商店。
@@ -85,8 +100,8 @@ python3 scripts/verify_package.py
 
 - Fork：[xpc010307/mihon-lizi-repo](https://github.com/xpc010307/mihon-lizi-repo)，原索引、APK 与图标。
 - Kotlin 源码基于 [xpc010307/mihon-extension-lizi](https://github.com/xpc010307/mihon-extension-lizi)，基线 `e24ac88`；保留原作者署名。
-- 签名、历史图片路径与章节顺序的协议处理参考 [Walter498/Walter](https://github.com/Walter498/Walter)，核对基线 `d178a49`。
-  本仓库独立实现 Kotlin 协议逻辑，没有移植 Venera 专用宿主代码、评论系统或正文探测。
+- 签名、历史图片路径、章节顺序及公开图片探测思路参考 [Walter498/Walter](https://github.com/Walter498/Walter)，核对基线 `d178a49`。
+  本仓库独立实现 Kotlin 协议逻辑与有限探测，没有移植 Venera 专用宿主代码或评论系统。
 - 设置读取的宿主兼容方式参考 [LittleSurvival/copymanga-copy20](https://github.com/LittleSurvival/copymanga-copy20) 的 `CopyManga` 实现。
 - 扩展结构参考 [Tachimanga 官方制作指南](https://tachimanga.app/help/guides/extensions_guide.html)；JAR 包结构参照
   [Keiyoushi](https://github.com/keiyoushi/extensions-source) 与 [Uchiyomi extension](https://github.com/AngeloSha/uchiyomi-extension) 的 JVM 分发方式。

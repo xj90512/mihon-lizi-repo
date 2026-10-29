@@ -19,6 +19,13 @@ internal object LiziProtocol {
     // Walter's historical lzimg/imgio defaults no longer resolve (2026-10-29).
     val imageBases = listOf("https://media.imgo.buzz", "https://t1.imge.store")
 
+    fun isImage(bytes: ByteArray): Boolean = bytes.size >= 3 && (
+        (bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte()) ||
+            (bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes.copyOfRange(1, 4).contentEquals("PNG".toByteArray())) ||
+            (bytes.size >= 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP") ||
+            (bytes.size >= 12 && String(bytes, 4, 8, Charsets.US_ASCII).startsWith("ftypavif"))
+        )
+
     // Public application protocol constant, not an account credential.
     private const val SIGN_PREFIX = "q2sIObYXCp2uBZgCNBlY93J3z67hK0wS"
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }

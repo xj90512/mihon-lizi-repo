@@ -27,6 +27,7 @@ import okhttp3.Headers
 import okhttp3.Request
 import okhttp3.Response
 import rx.Observable
+import rx.schedulers.Schedulers
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -56,15 +57,18 @@ class Lizi : HttpSource(), ConfigurableSource {
         liziPreferences(id)
     }
 
+    private val coverStore by lazy { LiziCoverStore(preferences) }
+    private val imageProbe by lazy { LiziImageProbe(super.client, { selectedImageBases() }) }
+
     // ------------------------------------------------------------------ 设置项
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
             key = PREF_AUTHORIZATION
-            title = "Authorization（登录令牌）"
-            summary = "公开浏览和搜索不需要令牌；正文需要你自己的栗子账号授权。"
+            title = "Authorization（选填）"
+            summary = "留空时探测公开图片，按文件页码读取；填写后使用官方图片顺序。"
             dialogTitle = "Authorization"
-            dialogMessage = "填写你自己的栗子账号 Authorization 值，支持裸 JWT、Jwt: 和 Bearer 前缀。账号的阅读时间、权限和额度仍由站方决定。"
+            dialogMessage = "可留空。图片探测模式首次打开章节较慢，个别人工上传章节可能乱序或缺页。填写自己的登录令牌可使用官方列表，支持裸 JWT、Jwt: 和 Bearer 前缀；官方模式仍受账号权限和额度限制。"
             setDefaultValue("")
         }.also { screen.addPreference(it) }
         ListPreference(screen.context).apply {
@@ -150,8 +154,11 @@ class Lizi : HttpSource(), ConfigurableSource {
     override fun mangaDetailsRequest(manga: SManga): Request =
         apiRequest("/app/api/v2/detail/${LiziProtocol.id(manga.url)}")
 
-    override fun mangaDetailsParse(response: Response): SManga =
-        dataOf(response).toSManga()
+    override fun mangaDetailsParse(response: Response): SManga {
+        val detail = dataOf(response)
+        rememberCovers(detail)
+        return detail.toSManga()
+    }
 
     // ------------------------------------------------------------------ 章节列表
 
@@ -161,6 +168,7 @@ class Lizi : HttpSource(), ConfigurableSource {
 
     override fun chapterListParse(response: Response): List<SChapter> {
         val detail = dataOf(response)
+        rememberCovers(detail)
         val chapters = detail["chapters"]?.jsonArray ?: JsonArray(emptyList())
         return LiziProtocol.chapters(chapters).map { it.toSChapter() }
     }
@@ -170,19 +178,18 @@ class Lizi : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter): Request =
         apiRequest("/app/api/chapter/v3/${LiziProtocol.id(chapter.url)}", chapter = true)
 
-    /**
-     * 正文接口未登录时返回的是**真实 HTTP 401**，`asObservableSuccess()` 会在
-     * `pageListParse` 之前就抛出 `HttpException(401)`，所以可操作的提示必须在这里给。
-     */
-    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> {
+    override fun fetchPageList(chapter: SChapter): Observable<List<Page>> = Observable.defer {
         if (authHeaderValue() == null) {
-            return Observable.error(LoginRequiredException())
-        }
-        return super.fetchPageList(chapter).onErrorResumeNext { error: Throwable ->
-            if (error.isUnauthorized()) {
-                Observable.error(LoginRequiredException())
-            } else {
-                Observable.error(error)
+            Observable.fromCallable {
+                val chapterId = LiziProtocol.id(chapter.url)
+                val cover = coverStore.get(chapterId)
+                    ?: throw IllegalStateException("免令牌模式缺少本章图片路径。请返回漫画详情，下拉刷新章节目录后重试。")
+                imageProbe.pages(cover).mapIndexed { index, path -> Page(index, "", imageUrl(path)) }
+            }.subscribeOn(Schedulers.io())
+        } else {
+            // A supplied token explicitly selects official ordering. Never replay a failed account request.
+            super.fetchPageList(chapter).onErrorResumeNext { error: Throwable ->
+                if (error.isUnauthorized()) Observable.error(LoginRequiredException()) else Observable.error(error)
             }
         }
     }
@@ -203,6 +210,11 @@ class Lizi : HttpSource(), ConfigurableSource {
     private fun dataOf(response: Response): JsonObject = LiziProtocol.data(
         response.body?.string().orEmpty(), response.request.url.encodedPath, response.code,
     )
+
+    private fun rememberCovers(detail: JsonObject) {
+        val chapters = detail["chapters"] as? JsonArray ?: return
+        coverStore.remember(chapters.map { it.jsonObject })
+    }
 
     private fun JsonObject.comicList(): List<SManga> =
         (this["comic_list"]?.jsonArray ?: JsonArray(emptyList())).map { it.jsonObject.toSManga() }
@@ -295,7 +307,7 @@ class Lizi : HttpSource(), ConfigurableSource {
  * 需要登录才能看正文。文案必须可操作——直接告诉用户去哪儿贴 token。
  */
 class LoginRequiredException : IllegalStateException(
-    "需要登录才能看正文：尚未填写有效授权，或栗子服务端拒绝了该授权。\n\n" +
-        "请打开「浏览 → 栗子漫画 → 工具栏 ⋮ → 设置」，把登录令牌粘贴进 Authorization 再重试。\n" +
-        "令牌取自你已登录的栗子漫画 App，支持裸 JWT、Jwt: 和 Bearer 前缀。",
+    "官方章节接口拒绝了当前授权。\n\n" +
+        "请在栗子漫画的源设置更新 Authorization，或清空它后尝试图片探测模式。\n" +
+        "官方模式仍受账号权限和额度限制；图片探测不能保证每章完整或保持官方顺序。",
 )
