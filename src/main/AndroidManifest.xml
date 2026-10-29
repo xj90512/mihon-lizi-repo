@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- mihon 用 reqFeatures 判定一个包是不是扩展 -->
+    <uses-feature
+        android:name="tachiyomi.extension"
+        android:required="false" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Tachiyomi: 栗子漫画"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true">
+
+        <!-- 扩展入口类（前导点 = 相对 packageName） -->
+        <meta-data
+            android:name="tachiyomi.extension.class"
+            android:value=".Lizi" />
+
+        <!-- mihon 优先读这个作为扩展显示名 -->
+        <meta-data
+            android:name="tachiyomix.name"
+            android:value="栗子漫画" />
+
+        <!-- 1 = NSFW（栗子含成人分区） -->
+        <meta-data
+            android:name="tachiyomi.extension.nsfw"
+            android:value="1" />
+
+        <!-- 2 = NSFW（优先于上面那条） -->
+        <meta-data
+            android:name="tachiyomix.contentWarning"
+            android:value="2" />
+    </application>
+
+</manifest>

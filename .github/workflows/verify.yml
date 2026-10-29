@@ -1,0 +1,31 @@
+name: Verify extension
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: ./gradlew --no-daemon testDebugUnitTest assembleRelease createReleaseExtensionJar
+      - run: python3 scripts/verify_package.py --build-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lizi-verification-build
+          path: |
+            build/outputs/jar/*.jar
+            build/reports/tests/testDebugUnitTest/
+          retention-days: 7
