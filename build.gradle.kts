@@ -20,8 +20,8 @@ android {
 
         // versionName 的 "1.6" 前缀会被 mihon 解析为 extensions-lib 版本
         // （ExtensionLoader.SUPPORTED_LIB_VERSIONS = [1.4, 1.6]），不要改。
-        versionCode = 5
-        versionName = "1.6.5"
+        versionCode = 6
+        versionName = "1.6.6"
     }
 
     signingConfigs {

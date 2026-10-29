@@ -58,7 +58,7 @@ class Lizi : HttpSource(), ConfigurableSource {
     }
 
     private val coverStore by lazy { LiziCoverStore(preferences) }
-    private val imageProbe by lazy { LiziImageProbe(super.client, { selectedImageBases() }) }
+    private val imageProbe by lazy { LiziImageProbe(super.client, { selectedImageBases() }, cache = LiziPageCache(preferences)) }
 
     // ------------------------------------------------------------------ 设置项
 
@@ -184,7 +184,7 @@ class Lizi : HttpSource(), ConfigurableSource {
                 val chapterId = LiziProtocol.id(chapter.url)
                 val cover = coverStore.get(chapterId)
                     ?: throw IllegalStateException("免令牌模式缺少本章图片路径。请返回漫画详情，下拉刷新章节目录后重试。")
-                imageProbe.pages(cover).mapIndexed { index, path -> Page(index, "", imageUrl(path)) }
+                imageProbe.pages(cover).mapIndexed { index, path -> Page(index, "", imageProbe.imageUrl(path)) }
             }.subscribeOn(Schedulers.io())
         } else {
             // A supplied token explicitly selects official ordering. Never replay a failed account request.
@@ -213,6 +213,8 @@ class Lizi : HttpSource(), ConfigurableSource {
 
     private fun rememberCovers(detail: JsonObject) {
         val chapters = detail["chapters"] as? JsonArray ?: return
+        // Refreshing manga metadata is the explicit way to discard a stale discovery list.
+        imageProbe.invalidate(chapters.mapNotNull { item -> item.jsonObject["cover"]?.jsonPrimitive?.contentOrNull })
         coverStore.remember(chapters.map { it.jsonObject })
     }
 

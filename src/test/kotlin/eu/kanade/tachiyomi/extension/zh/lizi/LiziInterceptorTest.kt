@@ -5,6 +5,8 @@ import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
 import org.junit.Assert.*
 import org.junit.Test
@@ -12,6 +14,22 @@ import java.util.concurrent.TimeUnit
 import java.io.IOException
 
 class LiziInterceptorTest {
+    @Test fun imageReadingRepairsPlaceholdersAndMixedSuffixesWithoutCredentials() {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    assertNull(request.getHeader("Authorization"))
+                    val body = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()) + ByteArray(if (request.path == "/book/2.webp") 2045 else 79)
+                    return MockResponse().setHeader("Content-Type", "image/jpeg").setBody(Buffer().write(body))
+                }
+            }
+            val client = OkHttpClient.Builder().addInterceptor(LiziInterceptor(apiBase = "https://api.invalid", imageBases = { listOf(server.url("/").toString()) })).build()
+            client.newCall(Request.Builder().url(server.url("/book/2.jpg")).header("Authorization", "local-test-token").build()).execute().use {
+                assertEquals("/book/2.webp", it.request.url.encodedPath)
+                assertEquals(2048, it.body!!.bytes().size)
+            }
+        }
+    }
     @Test fun metadataFallbackIsSignedAndHasNoAuthorization() {
         MockWebServer().use { primary -> MockWebServer().use { backup ->
             primary.enqueue(MockResponse().setResponseCode(503))
@@ -83,7 +101,7 @@ class LiziInterceptorTest {
         MockWebServer().use { primary -> MockWebServer().use { backup ->
             primary.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody("<html>blocked</html>"))
             backup.enqueue(MockResponse().setHeader("Content-Type", "image/jpeg")
-                .setBody(Buffer().write(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0x00))))
+                .setBody(Buffer().write(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()) + ByteArray(1021))))
             val bases = listOf(primary.url("/").toString(), backup.url("/").toString())
             val client = OkHttpClient.Builder().addInterceptor(LiziInterceptor(
                 apiBase = "https://api.invalid", imageBases = { bases },
@@ -91,7 +109,7 @@ class LiziInterceptorTest {
             client.newCall(Request.Builder().url(primary.url("/Manual/book/49.webp"))
                 .header("Authorization", "test-token").build()).execute().use {
                 assertEquals(200, it.code)
-                assertEquals(4, it.body!!.bytes().size)
+                assertEquals(1024, it.body!!.bytes().size)
             }
             assertNull(primary.takeRequest().getHeader("Authorization"))
             val retry = backup.takeRequest()

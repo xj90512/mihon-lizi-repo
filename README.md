@@ -1,7 +1,7 @@
 # 栗子漫画 · Tachimanga
 
 面向 Tachimanga 5.2 测试的栗子漫画扩展。订阅直接安装原生 JVM JAR；另提供 Android APK。
-用户已在 iPhone 的 Tachimanga 5.2 确认仓库添加与扩展安装成功。1.6.5 新增免令牌图片探测，仍需手机验收正文阅读。
+用户已在 iPhone 的 Tachimanga 5.2 确认仓库添加与扩展安装成功。1.6.6 优化免令牌缓存、换线及混合图片后缀，仍需手机验收。
 
 ## 安装
 
@@ -14,9 +14,9 @@ https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/index.min.json
 GitHub Pages 上的同内容索引在本次手机测试中提示「插件仓库不存在」，因此不作为推荐订阅入口；Pages 继续提供安装包下载。
 
 打开中文扩展列表，安装「栗子漫画」。这是 **Tachimanga 的 JAR 订阅**，不是 Android 的 APK 订阅。
-如果商店安装仍有问题，可以下载 [JAR 文件](https://xj90512.github.io/mihon-lizi-repo/apk/tachiyomi-zh.lizi-v1.6.5.jar)，
+如果商店安装仍有问题，可以下载 [JAR 文件](https://xj90512.github.io/mihon-lizi-repo/apk/tachiyomi-zh.lizi-v1.6.6.jar)，
 再在 Tachimanga「浏览 → 扩展 → ＋」选择文件导入。
-Android 用户可单独下载 [APK](https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/apk/tachiyomi-zh.lizi-v1.6.5.apk)。
+Android 用户可单独下载 [APK](https://raw.githubusercontent.com/xj90512/mihon-lizi-repo/main/apk/tachiyomi-zh.lizi-v1.6.6.apk)。
 
 默认下载通过本仓库的 GitHub Pages 静态文件服务，不调用 APK 在线转换或 GitHub Releases API。
 jsDelivr 当前对本仓库的 JAR 返回 403，因此不作为安装包下载地址。
@@ -32,8 +32,20 @@ jsDelivr 当前对本仓库的 JAR 返回 403，因此不作为安装包下载�
 - 官方模式的阅读时间、权限与额度仍由站方决定；不会自动重试消耗额度的章节请求。令牌失效时明确报错，不自动重复请求官方接口。
 - 图片首选线路可在源设置选择；仅图片失败时有限次数换线，遇到 429 停止换线。
 
-升级到 1.6.5 后，若要测试免令牌模式：清空源设置的 Authorization，回到漫画详情下拉刷新章节目录，再打开正文。
+升级到 1.6.6 后，若要测试免令牌模式：清空源设置的 Authorization，回到漫画详情下拉刷新章节目录，再打开正文。
 刷新会保存公开的章节封面路径，保留原章节 ID 与书架记录；旧目录未刷新时会提示缺少图片路径。
+
+## 1.6.6 的优化
+
+- 保存完整验证的图片清单及实际可用 CDN URL，重开章节、重启阅读器后可直接复用，减少重复探测与失败线路往返。
+- 缓存按章节封面和所选线路顺序区分，有效期六小时，最多 64 章及约 512k 字符；不缓存探测失败或含未解决缺页的清单。
+- 探测并发从四个调整为六个，保留 600 页、60 秒的上限及 401/403/429 停止行为。
+- 同时识别 JPG、WebP、PNG、JPEG、AVIF 后缀；阅读中遇到缺图或小占位图也会尝试其他后缀和线路。
+- 保留数字文件名的零填充（如 `001.jpg`），按数值而非字符串排序；内部缺页保留页码位置，避免后续页面整体前移。
+- 下拉刷新漫画详情/章节目录会批量清除该漫画的探测缓存；刷新前的在途探测不能重新写回旧结果。缓存过期会自动重探测。
+
+探测模式仍不能还原没有公开清单的特殊官方顺序（如人工把第 49 张插在第 12 张之后）；需要这种顺序时仍应使用自己的 Authorization。
+遇到疑似旧清单或缺页，可先下拉刷新漫画目录再重开章节。
 
 ## 1.6.5 的变化
 
@@ -82,6 +94,11 @@ python3 scripts/verify_package.py --build-only
 1.6.4 共 16 项单元测试，新增 Application-only / Context-only 两种宿主的设置读取测试。
 1.6.5 共 28 项单元测试，新增探测顺序、占位图、并发错误、已知封面锚点、限流停止、超时取消与封面缓存测试。
 桌面引擎已在 Authorization 留空时为一个实际样章探测得到 39 页；这不保证所有章节的完整性、顺序或手机兼容性。
+1.6.6 共 40 项单元测试，新增跨实例缓存、过期/刷新失效、刷新竞态、受损缓存、混合后缀、零填充与正文占位图恢复测试。
+同一套 120 页、响应延迟 5ms 的本地模拟中：1.6.5 首开 357ms/122 请求、重开 360ms/122 请求；
+1.6.6 首开 278ms/140 请求、重开 1ms/0 请求。首开多出的后缀检查用于减少漏页；模拟结果不等于手机网络的实际耗时。
+同一实际样章、两个独立桌面引擎实例的无令牌首开对照：1.6.5 为 9.378 秒、1.6.6 为 5.863 秒，均得到 38 页，新版首尾 JPEG 正常。
+该结果包含网络波动，不代表所有章节或手机的固定提速比例。
 
 正式 APK 签名使用环境变量 `LIZI_KEYSTORE`、`LIZI_STORE_PASSWORD`；可选 `LIZI_KEY_ALIAS`（默认 `lizi`）与
 `LIZI_KEY_PASSWORD`（默认与 store password 相同）。没有正式密钥时仅使用本地 debug 签名做构建验证，不应将该 APK 发布到正式商店。

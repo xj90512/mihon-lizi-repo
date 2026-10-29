@@ -19,6 +19,12 @@ internal object LiziProtocol {
     // Walter's historical lzimg/imgio defaults no longer resolve (2026-10-29).
     val imageBases = listOf("https://media.imgo.buzz", "https://t1.imge.store")
 
+    fun imageVariants(path: String): List<String> {
+        val match = Regex("^(.*?/\\d+)\\.(jpg|jpeg|png|webp|avif)$", RegexOption.IGNORE_CASE).matchEntire(path)
+            ?: return listOf(path)
+        return (listOf(path) + listOf("webp", "jpg", "png", "jpeg", "avif").map { "${match.groupValues[1]}.$it" }).distinct()
+    }
+
     fun isImage(bytes: ByteArray): Boolean = bytes.size >= 3 && (
         (bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte()) ||
             (bytes.size >= 8 && bytes[0] == 0x89.toByte() && bytes.copyOfRange(1, 4).contentEquals("PNG".toByteArray())) ||

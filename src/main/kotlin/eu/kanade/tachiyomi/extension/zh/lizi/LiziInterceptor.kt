@@ -45,14 +45,15 @@ internal class LiziInterceptor(
         val originalBase = request.url.newBuilder().encodedPath("/").query(null).fragment(null).build().toString().trimEnd('/')
         val ordered = (listOf(originalBase) + bases).map { it.trimEnd('/') }.distinct()
         val imagePath = request.url.encodedPath + (request.url.encodedQuery?.let { "?$it" } ?: "")
-        for ((index, base) in ordered.withIndex()) {
-            val attempt = request.newBuilder().url(base.trimEnd('/') + imagePath).removeHeader("Authorization").build()
+        val attempts = LiziProtocol.imageVariants(imagePath).flatMap { path -> ordered.map { it + path } }.distinct()
+        for ((index, url) in attempts.withIndex()) {
+            val attempt = request.newBuilder().url(url).removeHeader("Authorization").build()
             val response = try { chain.proceed(attempt) } catch (_: IOException) { null }
             if (response != null) {
                 // Stop on rate limits. Image failover must not amplify a 429.
-                if (response.code == 429 || response.code == 401) return response
+                if (response.code == 429 || response.code == 401 || response.code == 403) return response
                 if (response.isSuccessful && isImage(response)) return response
-                if (index == ordered.lastIndex && !response.isSuccessful) return response
+                if (index == attempts.lastIndex && !response.isSuccessful) return response
                 response.close()
             }
         }
@@ -60,6 +61,9 @@ internal class LiziInterceptor(
     }
 
     private fun isImage(response: Response): Boolean {
-        return LiziProtocol.isImage(response.peekBody(16).bytes())
+        val bytes = response.peekBody(1024).bytes()
+        val total = if (response.code == 206) response.header("Content-Range")?.substringAfterLast('/')?.toLongOrNull()
+            else response.body?.contentLength()?.takeIf { it >= 0 } ?: bytes.size.toLong()
+        return LiziProtocol.isImage(bytes) && total != null && total >= 1024
     }
 }

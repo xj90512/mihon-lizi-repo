@@ -11,8 +11,115 @@ import org.junit.Test
 import java.io.IOException
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 
 class LiziImageProbeTest {
+    @Test fun aRefreshDuringDiscoveryCannotRestoreTheOldCachedList() {
+        MockWebServer().use { server ->
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    entered.countDown()
+                    release.await(5, TimeUnit.SECONDS)
+                    return if (request.path in listOf("/book/1.jpg", "/book/2.jpg")) image() else MockResponse().setResponseCode(404)
+                }
+            }
+            val cache = LiziPageCache()
+            val resolver = LiziImageProbe(OkHttpClient(), { listOf(server.url("/").toString()) }, maxPages = 16, cache = cache)
+            val pool = Executors.newSingleThreadExecutor()
+            try {
+                val flight = pool.submit<List<String>> { resolver.pages("/book/1.jpg") }
+                assertTrue(entered.await(5, TimeUnit.SECONDS))
+                cache.invalidate("/book/1.jpg")
+                release.countDown()
+                assertEquals(2, flight.get(5, TimeUnit.SECONDS).size)
+                val before = server.requestCount
+                assertEquals(2, resolver.pages("/book/1.jpg").size)
+                assertTrue(server.requestCount > before)
+            } finally { release.countDown(); pool.shutdownNow() }
+        }
+    }
+    @Test fun reopeningAChapterUsesTheValidatedListWithoutRepeatingDiscovery() {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val n = request.path!!.substringAfterLast('/').substringBefore('.').toInt()
+                    return (if (n <= 120) image() else MockResponse().setResponseCode(404))
+                        .setHeadersDelay(5, TimeUnit.MILLISECONDS)
+                }
+            }
+            val resolver = LiziImageProbe(OkHttpClient(), { listOf(server.url("/").toString()) }, maxPages = 160)
+            val start = System.nanoTime()
+            val first = resolver.pages("/book/25.jpg")
+            val coldMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+            val coldRequests = server.requestCount
+            val again = System.nanoTime()
+            assertEquals(first, resolver.pages("/book/25.jpg"))
+            val warmMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - again)
+            println("BENCH coldMs=$coldMs coldRequests=$coldRequests warmMs=$warmMs warmRequests=${server.requestCount - coldRequests}")
+            assertEquals(120, first.size)
+            assertEquals(coldRequests, server.requestCount)
+        }
+    }
+
+    @Test fun mixedImageSuffixesAreRecoveredWithoutChangingPageNumbers() {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) =
+                    if (request.path in listOf("/book/1.jpg", "/book/2.webp", "/book/3.jpg", "/book/4.png")) image()
+                    else MockResponse().setResponseCode(404)
+            }
+            assertEquals(listOf("/book/1.jpg", "/book/2.webp", "/book/3.jpg", "/book/4.png"), probe(server).pages("/book/1.jpg"))
+        }
+    }
+
+    @Test fun zeroPaddedFilenamesKeepTheirOriginalWidth() {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) =
+                    if (request.path in listOf("/book/001.jpg", "/book/002.jpg", "/book/003.jpg")) image()
+                    else MockResponse().setResponseCode(404)
+            }
+            assertEquals(listOf("/book/001.jpg", "/book/002.jpg", "/book/003.jpg"), probe(server).pages("/book/001.jpg"))
+        }
+    }
+
+    @Test fun aNewSourceInstanceReusesThePersistedWinningUrls() {
+        MockWebServer().use { primary -> MockWebServer().use { backup ->
+            primary.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest) = MockResponse().setResponseCode(404) }
+            backup.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) =
+                    if (request.path in listOf("/book/1.jpg", "/book/2.webp")) image() else MockResponse().setResponseCode(404)
+            }
+            val bases = listOf(primary.url("/").toString(), backup.url("/").toString())
+            val prefs = memoryPagePreferences(mutableMapOf())
+            val first = LiziImageProbe(OkHttpClient(), { bases }, maxPages = 16, cache = LiziPageCache(prefs))
+            val paths = first.pages("/book/1.jpg")
+            val before = primary.requestCount + backup.requestCount
+            val second = LiziImageProbe(OkHttpClient(), { bases }, maxPages = 16, cache = LiziPageCache(prefs))
+            assertEquals(paths, second.pages("/book/1.jpg"))
+            assertEquals(backup.url("/book/2.webp").toString(), second.imageUrl("/book/2.webp"))
+            assertEquals(before, primary.requestCount + backup.requestCount)
+        } }
+    }
+
+    @Test fun untrustedCachedHostsAreDiscardedBeforeUse() {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) = if (request.path == "/book/1.jpg") image() else MockResponse().setResponseCode(404)
+            }
+            val cache = LiziPageCache()
+            val bases = listOf(server.url("/").toString().trimEnd('/'))
+            cache.put("/book/1.jpg", bases, listOf("https://other.invalid/book/1.jpg"))
+            val resolver = LiziImageProbe(OkHttpClient(), { bases }, maxPages = 16, cache = cache)
+            assertEquals(listOf("/book/1.jpg"), resolver.pages("/book/1.jpg"))
+            assertEquals(server.url("/book/1.jpg").toString(), resolver.imageUrl("/book/1.jpg"))
+            assertTrue(server.requestCount > 0)
+        }
+    }
+
     @Test fun findsLeadingGapAndKeepsNumericOrderWithoutAuthorization() {
         MockWebServer().use { server ->
             val requests = ConcurrentLinkedQueue<RecordedRequest>()
@@ -27,7 +134,7 @@ class LiziImageProbeTest {
             assertEquals((5..13).map { "/Manual/book/chapter/$it.jpg" }, paths)
             assertTrue(requests.isNotEmpty())
             requests.forEach { assertNull(it.getHeader("Authorization")); assertEquals("bytes=0-15", it.getHeader("Range")) }
-            assertTrue(server.requestCount <= 18)
+            assertTrue(server.requestCount <= 16 * 5)
         }
     }
 
@@ -69,7 +176,7 @@ class LiziImageProbeTest {
                 val resolver = LiziImageProbe(OkHttpClient(), { listOf(server.url("/").toString(), backup.url("/").toString()) }, maxPages = 16)
                 assertThrows(IOException::class.java) { resolver.pages("/book/1.jpg") }
                 assertEquals(0, backup.requestCount)
-                assertTrue(server.requestCount <= 4)
+                assertTrue(server.requestCount <= 6)
             } }
         }
     }
@@ -125,7 +232,7 @@ class LiziImageProbeTest {
                 }
             }
             val resolver = LiziImageProbe(OkHttpClient(), { listOf(server.url("/").toString()) }, maxPages = 32)
-            assertEquals(listOf("/book/1.jpg", "/book/2.jpg", "/book/25.jpg"), resolver.pages("/book/25.jpg"))
+            assertEquals((1..25).map { "/book/$it.jpg" }, resolver.pages("/book/25.jpg"))
         }
     }
 
